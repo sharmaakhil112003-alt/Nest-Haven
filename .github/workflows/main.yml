@@ -1,0 +1,49 @@
+
+name: Build Nest Haven APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'Nest-Haven-main.zip'
+      - '.github/workflows/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Extract project
+        run: |
+          unzip -q Nest-Haven-main.zip -d project
+
+      - name: Build APK
+        run: |
+          WRAPPER=$(find project -name gradlew -type f | head -n 1)
+          if [ -z "$WRAPPER" ]; then
+            echo "Gradle wrapper not found in ZIP"
+            exit 1
+          fi
+          chmod +x "$WRAPPER"
+          cd "$(dirname "$WRAPPER")"
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nest-Haven-APK
+          path: project/**/build/outputs/apk/debug/*.apk
+
+          
