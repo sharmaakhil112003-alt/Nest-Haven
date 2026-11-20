@@ -1,0 +1,6 @@
+{
+  "name": "Nest Haven",
+  "description": "Public Tenant and Verified Property Owner rental discovery, ₹99 locality search, booking, and rent tracking app for Nest Haven.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

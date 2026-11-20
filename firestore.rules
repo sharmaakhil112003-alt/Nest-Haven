@@ -1,0 +1,917 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Hardened Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isVerifiedEmail() {
+      return isSignedIn() && request.auth.token.email_verified == true && request.auth.token.email is string;
+    }
+
+    function isBootstrapMasterEmail() {
+      return isVerifiedEmail() && request.auth.token.email == 'sharmaakhil112003@gmail.com';
+    }
+
+    function isMasterSuperAdmin() {
+      return isVerifiedEmail() && (
+        (
+          exists(/databases/$(database)/documents/governance/master_config) &&
+          get(/databases/$(database)/documents/governance/master_config).data.masterUid == request.auth.uid
+        ) ||
+        (
+          !exists(/databases/$(database)/documents/governance/master_config) &&
+          isBootstrapMasterEmail()
+        )
+      );
+    }
+
+    function isActiveAdmin() {
+      return isVerifiedEmail() &&
+             exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.active == true;
+    }
+
+    function isVerifiedApprovedOwner() {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.accountType == 'OWNER' &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.ownerApproved == true &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.kycVerified == true;
+    }
+
+    // 3. Entity Validation Blueprints (Preserved + Public Tenant/Owner Extensions)
+    function isValidMasterConfig(data) {
+      return data.keys().hasAll([
+               'masterUid', 'masterEmail', 'masterDisplayName', 'ownershipLocked',
+               'ownershipTransferArmed', 'pendingSuccessorEmail', 'twoFactorEnforced',
+               'strongPasswordEnforced', 'autoBackupEnabled', 'backupIntervalHours',
+               'recoveryEmail', 'firebaseProjectId', 'domainName', 'publishingAccount',
+               'sourceRepoRef', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'masterUid', 'masterEmail', 'masterDisplayName', 'ownershipLocked',
+               'ownershipTransferArmed', 'pendingSuccessorEmail', 'twoFactorEnforced',
+               'strongPasswordEnforced', 'autoBackupEnabled', 'backupIntervalHours',
+               'recoveryEmail', 'firebaseProjectId', 'domainName', 'publishingAccount',
+               'sourceRepoRef', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.masterUid) &&
+             data.masterEmail is string && data.masterEmail.size() >= 3 && data.masterEmail.size() <= 120 &&
+             data.masterDisplayName is string && data.masterDisplayName.size() >= 1 && data.masterDisplayName.size() <= 100 &&
+             data.ownershipLocked is bool &&
+             data.ownershipTransferArmed is bool &&
+             data.pendingSuccessorEmail is string && data.pendingSuccessorEmail.size() <= 120 &&
+             data.twoFactorEnforced is bool &&
+             data.strongPasswordEnforced is bool &&
+             data.autoBackupEnabled is bool &&
+             data.backupIntervalHours is int && data.backupIntervalHours >= 1 && data.backupIntervalHours <= 168 &&
+             data.recoveryEmail is string && data.recoveryEmail.size() <= 120 &&
+             data.firebaseProjectId is string && data.firebaseProjectId.size() >= 1 && data.firebaseProjectId.size() <= 120 &&
+             data.domainName is string && data.domainName.size() >= 1 && data.domainName.size() <= 120 &&
+             data.publishingAccount is string && data.publishingAccount.size() >= 1 && data.publishingAccount.size() <= 120 &&
+             data.sourceRepoRef is string && data.sourceRepoRef.size() >= 1 && data.sourceRepoRef.size() <= 200 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidPublicDirectory(data) {
+      return data.keys().hasAll(['masterUid', 'strictLockActive', 'updatedAt']) &&
+             data.keys().hasOnly(['masterUid', 'strictLockActive', 'updatedAt']) &&
+             isValidId(data.masterUid) &&
+             data.strictLockActive is bool &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll([
+               'userId', 'email', 'displayName', 'phone', 'accountType', 'preferredLanguage',
+               'role', 'ownerApproved', 'kycVerified', 'vaultPasswordHash',
+               'vaultPasswordSalt', 'totpEnabled', 'recoveryCodesCount', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'userId', 'email', 'displayName', 'phone', 'accountType', 'preferredLanguage',
+               'role', 'ownerApproved', 'kycVerified', 'vaultPasswordHash',
+               'vaultPasswordSalt', 'totpEnabled', 'recoveryCodesCount', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.userId) &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 120 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+             data.phone is string && data.phone.size() <= 20 &&
+             data.accountType in ['TENANT', 'OWNER'] &&
+             data.preferredLanguage in ['en', 'hi'] &&
+             data.role == 'MEMBER' &&
+             data.ownerApproved is bool &&
+             data.kycVerified is bool &&
+             data.vaultPasswordHash is string && data.vaultPasswordHash.size() <= 128 &&
+             data.vaultPasswordSalt is string && data.vaultPasswordSalt.size() <= 64 &&
+             data.totpEnabled is bool &&
+             data.recoveryCodesCount is int && data.recoveryCodesCount >= 0 && data.recoveryCodesCount <= 10 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAdminAccount(data) {
+      return data.keys().hasAll([
+               'adminUid', 'masterUid', 'email', 'displayName', 'title',
+               'canViewProperties', 'canViewAuditSummary', 'active', 'addedByUid',
+               'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'adminUid', 'masterUid', 'email', 'displayName', 'title',
+               'canViewProperties', 'canViewAuditSummary', 'active', 'addedByUid',
+               'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.adminUid) &&
+             isValidId(data.masterUid) &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 120 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 80 &&
+             data.canViewProperties is bool &&
+             data.canViewAuditSummary is bool &&
+             data.active is bool &&
+             isValidId(data.addedByUid) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAppSetting(data) {
+      return data.keys().hasAll([
+               'masterUid', 'key', 'label', 'value', 'category',
+               'description', 'updatedByUid', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'masterUid', 'key', 'label', 'value', 'category',
+               'description', 'updatedByUid', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.masterUid) &&
+             data.key is string && data.key.size() >= 1 && data.key.size() <= 64 &&
+             data.label is string && data.label.size() >= 1 && data.label.size() <= 100 &&
+             data.value is string && data.value.size() <= 240 &&
+             data.category in ['SECURITY', 'PORTAL', 'GOVERNANCE', 'OPERATIONS'] &&
+             data.description is string && data.description.size() <= 300 &&
+             isValidId(data.updatedByUid) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidPaymentGateway(data) {
+      return data.keys().hasAll([
+               'masterUid', 'providerName', 'merchantDisplayName', 'environment',
+               'currency', 'payoutSchedule', 'maskedSettlementLast4', 'active',
+               'updatedByUid', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'masterUid', 'providerName', 'merchantDisplayName', 'environment',
+               'currency', 'payoutSchedule', 'maskedSettlementLast4', 'active',
+               'updatedByUid', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.masterUid) &&
+             data.providerName is string && data.providerName.size() >= 1 && data.providerName.size() <= 64 &&
+             data.merchantDisplayName is string && data.merchantDisplayName.size() >= 1 && data.merchantDisplayName.size() <= 100 &&
+             data.environment in ['SANDBOX', 'PRODUCTION'] &&
+             data.currency is string && data.currency.size() >= 3 && data.currency.size() <= 8 &&
+             data.payoutSchedule in ['DAILY', 'WEEKLY', 'MONTHLY'] &&
+             data.maskedSettlementLast4 is string && data.maskedSettlementLast4.matches('^[0-9]{4}$') &&
+             data.active is bool &&
+             isValidId(data.updatedByUid) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidProperty(data) {
+      return data.keys().hasAll([
+               'masterUid', 'name', 'state', 'city', 'locality', 'buildingName',
+               'address', 'roomNumber', 'roomType', 'monthlyRentInr', 'facilities',
+               'photoUrls', 'occupancyStatus', 'published', 'ownerUid', 'ownerName',
+               'ownerPhoneMasked', 'ownerVerified', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'masterUid', 'name', 'state', 'city', 'locality', 'buildingName',
+               'address', 'roomNumber', 'roomType', 'monthlyRentInr', 'facilities',
+               'photoUrls', 'occupancyStatus', 'published', 'ownerUid', 'ownerName',
+               'ownerPhoneMasked', 'ownerVerified', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.masterUid) &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+             data.state is string && data.state.size() >= 1 && data.state.size() <= 64 &&
+             data.city is string && data.city.size() >= 1 && data.city.size() <= 64 &&
+             data.locality is string && data.locality.size() >= 1 && data.locality.size() <= 80 &&
+             data.buildingName is string && data.buildingName.size() <= 100 &&
+             data.address is string && data.address.size() >= 1 && data.address.size() <= 240 &&
+             data.roomNumber is string && data.roomNumber.size() >= 1 && data.roomNumber.size() <= 40 &&
+             data.roomType in ['SINGLE', 'DOUBLE'] &&
+             data.monthlyRentInr is int && data.monthlyRentInr >= 500 && data.monthlyRentInr <= 1000000 &&
+             data.facilities is list && data.facilities.size() <= 15 &&
+             (data.facilities.size() == 0 || data.facilities[0] is string) &&
+             data.photoUrls is list && data.photoUrls.size() <= 10 &&
+             (data.photoUrls.size() == 0 || data.photoUrls[0] is string) &&
+             data.occupancyStatus in ['AVAILABLE', 'OCCUPIED', 'MAINTENANCE'] &&
+             data.published is bool &&
+             data.ownerUid is string && data.ownerUid.size() <= 128 &&
+             data.ownerName is string && data.ownerName.size() <= 100 &&
+             data.ownerPhoneMasked is string && data.ownerPhoneMasked.size() <= 32 &&
+             data.ownerVerified is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidSearchUnlock(data) {
+      return data.keys().hasAll([
+               'tenantUid', 'state', 'city', 'locality', 'buildingFilter',
+               'monthlyBudgetInr', 'roomPreference', 'requiredFacilities', 'feeAmountInr',
+               'unlockStatus', 'alternativeOffered', 'alternativeRentInr', 'alternativeAccepted',
+               'refundStatus', 'paymentOrderId', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'tenantUid', 'state', 'city', 'locality', 'buildingFilter',
+               'monthlyBudgetInr', 'roomPreference', 'requiredFacilities', 'feeAmountInr',
+               'unlockStatus', 'alternativeOffered', 'alternativeRentInr', 'alternativeAccepted',
+               'refundStatus', 'paymentOrderId', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.tenantUid) &&
+             data.state is string && data.state.size() >= 1 && data.state.size() <= 64 &&
+             data.city is string && data.city.size() >= 1 && data.city.size() <= 64 &&
+             data.locality is string && data.locality.size() >= 1 && data.locality.size() <= 80 &&
+             data.buildingFilter is string && data.buildingFilter.size() <= 100 &&
+             data.monthlyBudgetInr is int && data.monthlyBudgetInr >= 500 && data.monthlyBudgetInr <= 1000000 &&
+             data.roomPreference in ['SINGLE', 'DOUBLE', 'ANY'] &&
+             data.requiredFacilities is list && data.requiredFacilities.size() <= 15 &&
+             (data.requiredFacilities.size() == 0 || data.requiredFacilities[0] is string) &&
+             data.feeAmountInr == 99 &&
+             data.unlockStatus in ['PAYMENT_PENDING', 'UNLOCKED', 'NO_MATCH_REFUND_ELIGIBLE'] &&
+             data.alternativeOffered is bool &&
+             data.alternativeRentInr is int && data.alternativeRentInr >= 0 && data.alternativeRentInr <= 1000000 &&
+             data.alternativeAccepted is bool &&
+             data.refundStatus in ['NONE', 'REQUESTED', 'UNDER_VERIFICATION', 'REFUNDED', 'NOT_ELIGIBLE_ALTERNATIVE_ACCEPTED'] &&
+             data.paymentOrderId is string && data.paymentOrderId.size() <= 128 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidBookingRequest(data) {
+      return data.keys().hasAll([
+               'propertyId', 'propertyTitle', 'localitySummary', 'tenantUid', 'tenantName',
+               'ownerUid', 'ownerName', 'requestType', 'durationMonths', 'monthlyRentInr',
+               'firstMonthRentPaid', 'status', 'ownerDecision', 'ownerDecisionNote',
+               'cancellationReason', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'propertyId', 'propertyTitle', 'localitySummary', 'tenantUid', 'tenantName',
+               'ownerUid', 'ownerName', 'requestType', 'durationMonths', 'monthlyRentInr',
+               'firstMonthRentPaid', 'status', 'ownerDecision', 'ownerDecisionNote',
+               'cancellationReason', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.propertyId) &&
+             data.propertyTitle is string && data.propertyTitle.size() >= 1 && data.propertyTitle.size() <= 120 &&
+             data.localitySummary is string && data.localitySummary.size() >= 1 && data.localitySummary.size() <= 160 &&
+             isValidId(data.tenantUid) &&
+             data.tenantName is string && data.tenantName.size() >= 1 && data.tenantName.size() <= 100 &&
+             isValidId(data.ownerUid) &&
+             data.ownerName is string && data.ownerName.size() >= 1 && data.ownerName.size() <= 100 &&
+             data.requestType in ['BOOKING', 'VISIT'] &&
+             data.durationMonths in [2, 6, 12, 24] &&
+             data.monthlyRentInr is int && data.monthlyRentInr >= 500 && data.monthlyRentInr <= 1000000 &&
+             data.firstMonthRentPaid is bool &&
+             data.status in ['PENDING_PAYMENT', 'VISIT_REQUESTED', 'ACTIVE', 'CANCELLED', 'COMPLETED'] &&
+             data.ownerDecision in ['PENDING', 'APPROVED', 'REJECTED'] &&
+             data.ownerDecisionNote is string && data.ownerDecisionNote.size() <= 300 &&
+             data.cancellationReason is string && data.cancellationReason.size() <= 300 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidPaymentOrder(data) {
+      return data.keys().hasAll([
+               'tenantUid', 'ownerUid', 'bookingId', 'searchUnlockId', 'paymentPurpose',
+               'amountInr', 'platformFeeInr', 'rentMonthNumber', 'paymentStatus',
+               'settlementStatus', 'ownerVerifiedReceipt', 'receiptRef', 'failureReason',
+               'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'tenantUid', 'ownerUid', 'bookingId', 'searchUnlockId', 'paymentPurpose',
+               'amountInr', 'platformFeeInr', 'rentMonthNumber', 'paymentStatus',
+               'settlementStatus', 'ownerVerifiedReceipt', 'receiptRef', 'failureReason',
+               'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.tenantUid) &&
+             data.ownerUid is string && data.ownerUid.size() <= 128 &&
+             data.bookingId is string && data.bookingId.size() <= 128 &&
+             data.searchUnlockId is string && data.searchUnlockId.size() <= 128 &&
+             data.paymentPurpose in ['SEARCH_FEE_99', 'FIRST_MONTH_RENT', 'MONTHLY_RENT'] &&
+             data.amountInr is int && data.amountInr >= 1 && data.amountInr <= 1000000 &&
+             data.platformFeeInr is int && data.platformFeeInr >= 0 && data.platformFeeInr <= 50000 &&
+             data.rentMonthNumber is int && data.rentMonthNumber >= 0 && data.rentMonthNumber <= 24 &&
+             data.paymentStatus in ['AWAITING_GATEWAY_VERIFICATION', 'VERIFIED_BY_SERVER', 'FAILED', 'CANCELLED', 'REFUNDED'] &&
+             data.settlementStatus in ['NOT_APPLICABLE', 'PENDING_VERIFICATION', 'SCHEDULED_24H', 'SETTLED_24H'] &&
+             data.ownerVerifiedReceipt is bool &&
+             data.receiptRef is string && data.receiptRef.size() <= 80 &&
+             data.failureReason is string && data.failureReason.size() <= 240 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['recipientUid', 'category', 'title', 'message', 'readFlag', 'createdAt']) &&
+             data.keys().hasOnly(['recipientUid', 'category', 'title', 'message', 'readFlag', 'createdAt']) &&
+             isValidId(data.recipientUid) &&
+             data.category in ['BOOKING', 'PAYMENT', 'RENT_REMINDER', 'REFUND', 'AVAILABILITY', 'COMPLAINT'] &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             data.message is string && data.message.size() >= 1 && data.message.size() <= 400 &&
+             data.readFlag is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidComplaint(data) {
+      return data.keys().hasAll([
+               'reporterUid', 'reporterRole', 'reporterName', 'category',
+               'subject', 'description', 'status', 'adminResolutionNote', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'reporterUid', 'reporterRole', 'reporterName', 'category',
+               'subject', 'description', 'status', 'adminResolutionNote', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.reporterUid) &&
+             data.reporterRole in ['TENANT', 'OWNER'] &&
+             data.reporterName is string && data.reporterName.size() >= 1 && data.reporterName.size() <= 100 &&
+             data.category in ['PROPERTY', 'PAYMENT', 'REFUND', 'SAFETY', 'OWNER_TENANT', 'OTHER'] &&
+             data.subject is string && data.subject.size() >= 3 && data.subject.size() <= 120 &&
+             data.description is string && data.description.size() >= 5 && data.description.size() <= 1000 &&
+             data.status in ['OPEN', 'IN_REVIEW', 'RESOLVED', 'CLOSED'] &&
+             data.adminResolutionNote is string && data.adminResolutionNote.size() <= 400 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidStayReview(data) {
+      return data.keys().hasAll(['bookingId', 'reviewerUid', 'reviewerRole', 'targetUid', 'rating', 'comment', 'createdAt']) &&
+             data.keys().hasOnly(['bookingId', 'reviewerUid', 'reviewerRole', 'targetUid', 'rating', 'comment', 'createdAt']) &&
+             isValidId(data.bookingId) &&
+             isValidId(data.reviewerUid) &&
+             data.reviewerRole in ['TENANT', 'OWNER'] &&
+             isValidId(data.targetUid) &&
+             data.rating is int && data.rating >= 1 && data.rating <= 5 &&
+             data.comment is string && data.comment.size() >= 3 && data.comment.size() <= 500 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidAuthRequest(data) {
+      return data.keys().hasAll([
+               'masterUid', 'requesterUid', 'requesterEmail', 'requesterName',
+               'requesterRole', 'changeType', 'summary', 'status',
+               'reviewedByUid', 'reviewNote', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'masterUid', 'requesterUid', 'requesterEmail', 'requesterName',
+               'requesterRole', 'changeType', 'summary', 'status',
+               'reviewedByUid', 'reviewNote', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidId(data.masterUid) &&
+             isValidId(data.requesterUid) &&
+             data.requesterEmail is string && data.requesterEmail.size() >= 3 && data.requesterEmail.size() <= 120 &&
+             data.requesterName is string && data.requesterName.size() >= 1 && data.requesterName.size() <= 100 &&
+             data.requesterRole in ['DEVELOPER', 'EMPLOYEE', 'OWNER', 'TENANT'] &&
+             data.changeType in ['APP_EDIT', 'PROPERTY_UPDATE', 'ACCESS_ELEVATION', 'GATEWAY_CHANGE'] &&
+             data.summary is string && data.summary.size() >= 3 && data.summary.size() <= 400 &&
+             data.status in ['PENDING', 'APPROVED', 'REJECTED'] &&
+             data.reviewedByUid is string && data.reviewedByUid.size() <= 128 &&
+             data.reviewNote is string && data.reviewNote.size() <= 300 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll([
+               'masterUid', 'actorUid', 'actorEmail', 'actorRole', 'action',
+               'targetType', 'targetId', 'summary', 'severity', 'createdAt'
+             ]) &&
+             data.keys().hasOnly([
+               'masterUid', 'actorUid', 'actorEmail', 'actorRole', 'action',
+               'targetType', 'targetId', 'summary', 'severity', 'createdAt'
+             ]) &&
+             isValidId(data.masterUid) &&
+             isValidId(data.actorUid) &&
+             data.actorEmail is string && data.actorEmail.size() >= 3 && data.actorEmail.size() <= 120 &&
+             data.actorRole in ['MASTER_SUPER_ADMIN', 'ADMIN', 'OWNER', 'TENANT', 'MEMBER'] &&
+             data.action is string && data.action.size() >= 1 && data.action.size() <= 64 &&
+             data.targetType is string && data.targetType.size() >= 1 && data.targetType.size() <= 64 &&
+             data.targetId is string && data.targetId.size() >= 1 && data.targetId.size() <= 128 &&
+             data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 400 &&
+             data.severity in ['INFO', 'SECURITY', 'CRITICAL'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidBackupSnapshot(data) {
+      return data.keys().hasAll([
+               'masterUid', 'createdByUid', 'triggerType', 'settingsCount',
+               'propertiesCount', 'adminsCount', 'auditLogsCount',
+               'checksumSha256', 'encryptedStatus', 'createdAt'
+             ]) &&
+             data.keys().hasOnly([
+               'masterUid', 'createdByUid', 'triggerType', 'settingsCount',
+               'propertiesCount', 'adminsCount', 'auditLogsCount',
+               'checksumSha256', 'encryptedStatus', 'createdAt'
+             ]) &&
+             isValidId(data.masterUid) &&
+             isValidId(data.createdByUid) &&
+             data.triggerType in ['AUTOMATIC', 'MANUAL'] &&
+             data.settingsCount is int && data.settingsCount >= 0 &&
+             data.propertiesCount is int && data.propertiesCount >= 0 &&
+             data.adminsCount is int && data.adminsCount >= 0 &&
+             data.auditLogsCount is int && data.auditLogsCount >= 0 &&
+             data.checksumSha256 is string && data.checksumSha256.size() >= 16 && data.checksumSha256.size() <= 128 &&
+             data.encryptedStatus == 'AES256_TLS13_VERIFIED' &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidAccountClaim(data) {
+      return data.keys().hasAll(['ownerUid', 'claimType', 'createdAt']) &&
+             data.keys().hasOnly(['ownerUid', 'claimType', 'createdAt']) &&
+             isValidId(data.ownerUid) &&
+             data.claimType in ['EMAIL', 'PHONE'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    // 4. Collection Rules
+
+    // Governance Singleton Documents (Master Super Admin Exclusive)
+    match /governance/master_config {
+      allow get: if isMasterSuperAdmin();
+      allow list: if false;
+      allow create: if isBootstrapMasterEmail() &&
+                       isValidMasterConfig(incoming()) &&
+                       incoming().masterUid == request.auth.uid &&
+                       incoming().masterEmail == request.auth.token.email &&
+                       incoming().ownershipLocked == true &&
+                       incoming().ownershipTransferArmed == false;
+      allow update: if isMasterSuperAdmin() &&
+                       isValidMasterConfig(incoming()) &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         (
+                           incoming().masterUid == existing().masterUid &&
+                           incoming().masterEmail == existing().masterEmail
+                         ) ||
+                         (
+                           existing().ownershipTransferArmed == true &&
+                           incoming().ownershipTransferArmed == false &&
+                           incoming().ownershipLocked == true &&
+                           incoming().masterUid != existing().masterUid
+                         )
+                       );
+      allow delete: if false;
+    }
+
+    match /governance/public_directory {
+      allow get: if isSignedIn();
+      allow list: if false;
+      allow create: if isMasterSuperAdmin() &&
+                       isValidPublicDirectory(incoming()) &&
+                       incoming().masterUid == request.auth.uid;
+      allow update: if isMasterSuperAdmin() &&
+                       isValidPublicDirectory(incoming());
+      allow delete: if false;
+    }
+
+    // User Isolated Profiles (Tenants & Owners; Admin controls approval/KYC flags)
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isMasterSuperAdmin());
+      allow list: if false;
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().ownerApproved == false &&
+                       incoming().kycVerified == false;
+      allow update: if isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().role == existing().role &&
+                       (
+                         (
+                           isSignedIn() &&
+                           request.auth.uid == userId &&
+                           incoming().ownerApproved == existing().ownerApproved &&
+                           incoming().kycVerified == existing().kycVerified &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'displayName', 'phone', 'accountType', 'preferredLanguage',
+                             'vaultPasswordHash', 'vaultPasswordSalt', 'totpEnabled',
+                             'recoveryCodesCount', 'updatedAt'
+                           ])
+                         ) ||
+                         (
+                           isMasterSuperAdmin() &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'ownerApproved', 'kycVerified', 'updatedAt'
+                           ])
+                         )
+                       );
+      allow delete: if false;
+    }
+
+    // Privacy-Safe Duplicate Account Prevention Claims (SHA-256 keyed; zero PII; no list)
+    match /account_claims/{claimId} {
+      allow get: if isSignedIn() && isValidId(claimId);
+      allow list: if false;
+      allow create: if isSignedIn() &&
+                       isValidId(claimId) &&
+                       claimId.matches('^(email|phone)_[a-f0-9]{64}$') &&
+                       isValidAccountClaim(incoming()) &&
+                       incoming().ownerUid == request.auth.uid;
+      allow update: if isSignedIn() &&
+                       isValidId(claimId) &&
+                       claimId.matches('^(email|phone)_[a-f0-9]{64}$') &&
+                       isValidAccountClaim(incoming()) &&
+                       existing().ownerUid == request.auth.uid &&
+                       incoming().ownerUid == request.auth.uid &&
+                       incoming().createdAt == existing().createdAt;
+      allow delete: if false;
+    }
+
+    // Admin Accounts Registry (Master Super Admin Exclusive Management)
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && (request.auth.uid == adminId || isMasterSuperAdmin());
+      allow list: if isVerifiedEmail() && (isBootstrapMasterEmail() || resource.data.masterUid == request.auth.uid);
+      allow create: if isMasterSuperAdmin() &&
+                       isValidId(adminId) &&
+                       isValidAdminAccount(incoming()) &&
+                       incoming().adminUid == adminId &&
+                       incoming().masterUid == request.auth.uid &&
+                       incoming().addedByUid == request.auth.uid;
+      allow update: if isMasterSuperAdmin() &&
+                       isValidId(adminId) &&
+                       isValidAdminAccount(incoming()) &&
+                       incoming().adminUid == existing().adminUid &&
+                       incoming().masterUid == existing().masterUid &&
+                       incoming().addedByUid == existing().addedByUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'email', 'displayName', 'title', 'canViewProperties',
+                         'canViewAuditSummary', 'active', 'updatedAt'
+                       ]);
+      allow delete: if isMasterSuperAdmin() && isValidId(adminId);
+    }
+
+    // Application Settings (Master Super Admin Exclusive)
+    match /app_settings/{settingId} {
+      allow get: if isValidId(settingId) && (isMasterSuperAdmin() || isActiveAdmin());
+      allow list: if isVerifiedEmail() && (isBootstrapMasterEmail() || resource.data.masterUid == request.auth.uid);
+      allow create: if isMasterSuperAdmin() &&
+                       isValidId(settingId) &&
+                       isValidAppSetting(incoming()) &&
+                       incoming().masterUid == request.auth.uid &&
+                       incoming().updatedByUid == request.auth.uid;
+      allow update: if isMasterSuperAdmin() &&
+                       isValidId(settingId) &&
+                       isValidAppSetting(incoming()) &&
+                       incoming().masterUid == existing().masterUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedByUid == request.auth.uid &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'key', 'label', 'value', 'category', 'description', 'updatedByUid', 'updatedAt'
+                       ]);
+      allow delete: if isMasterSuperAdmin() && isValidId(settingId);
+    }
+
+    // Payment Gateway Settings (Master Super Admin Exclusive, Masked Only)
+    match /payment_gateways/{gatewayId} {
+      allow get: if isMasterSuperAdmin() && isValidId(gatewayId);
+      allow list: if isVerifiedEmail() && (isBootstrapMasterEmail() || resource.data.masterUid == request.auth.uid);
+      allow create: if isMasterSuperAdmin() &&
+                       isValidId(gatewayId) &&
+                       isValidPaymentGateway(incoming()) &&
+                       incoming().masterUid == request.auth.uid &&
+                       incoming().updatedByUid == request.auth.uid;
+      allow update: if isMasterSuperAdmin() &&
+                       isValidId(gatewayId) &&
+                       isValidPaymentGateway(incoming()) &&
+                       incoming().masterUid == existing().masterUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedByUid == request.auth.uid &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'providerName', 'merchantDisplayName', 'environment', 'currency',
+                         'payoutSchedule', 'maskedSettlementLast4', 'active', 'updatedByUid', 'updatedAt'
+                       ]);
+      allow delete: if isMasterSuperAdmin() && isValidId(gatewayId);
+    }
+
+    // Properties & Rooms (Write: Master Super Admin ONLY; Read: Published for Tenants or Assigned Owner)
+    match /properties/{propertyId} {
+      allow get: if isValidId(propertyId) && (
+        isMasterSuperAdmin() ||
+        isActiveAdmin() ||
+        (isSignedIn() && resource.data.ownerUid == request.auth.uid) ||
+        (isSignedIn() && resource.data.published == true)
+      );
+      allow list: if isSignedIn() && (
+        isBootstrapMasterEmail() ||
+        resource.data.masterUid == request.auth.uid ||
+        resource.data.ownerUid == request.auth.uid ||
+        resource.data.published == true
+      );
+      allow create: if isMasterSuperAdmin() &&
+                       isValidId(propertyId) &&
+                       isValidProperty(incoming()) &&
+                       incoming().masterUid == request.auth.uid;
+      allow update: if isMasterSuperAdmin() &&
+                       isValidId(propertyId) &&
+                       isValidProperty(incoming()) &&
+                       incoming().masterUid == existing().masterUid &&
+                       incoming().createdAt == existing().createdAt;
+      allow delete: if isMasterSuperAdmin() && isValidId(propertyId);
+    }
+
+    // ₹99 Search Unlocks & Anti-Fraud Refund Records
+    match /search_unlocks/{unlockId} {
+      allow get: if isValidId(unlockId) && (isMasterSuperAdmin() || (isSignedIn() && resource.data.tenantUid == request.auth.uid));
+      allow list: if isSignedIn() && (isBootstrapMasterEmail() || resource.data.tenantUid == request.auth.uid);
+      allow create: if isSignedIn() &&
+                       isValidId(unlockId) &&
+                       isValidSearchUnlock(incoming()) &&
+                       incoming().tenantUid == request.auth.uid &&
+                       incoming().feeAmountInr == 99 &&
+                       incoming().unlockStatus == 'PAYMENT_PENDING' &&
+                       incoming().alternativeOffered == false &&
+                       incoming().alternativeAccepted == false &&
+                       incoming().refundStatus == 'NONE';
+      allow update: if isValidId(unlockId) &&
+                       isValidSearchUnlock(incoming()) &&
+                       incoming().tenantUid == existing().tenantUid &&
+                       incoming().feeAmountInr == existing().feeAmountInr &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         isMasterSuperAdmin() ||
+                         (
+                           isSignedIn() &&
+                           resource.data.tenantUid == request.auth.uid &&
+                           (
+                             // Tenant accepts offered alternative -> non-refundable
+                             (
+                               existing().alternativeOffered == true &&
+                               incoming().alternativeAccepted == true &&
+                               incoming().refundStatus == 'NOT_ELIGIBLE_ALTERNATIVE_ACCEPTED' &&
+                               incoming().diff(existing()).affectedKeys().hasOnly(['alternativeAccepted', 'refundStatus', 'updatedAt'])
+                             ) ||
+                             // Tenant requests refund only when no match and no alternative accepted
+                             (
+                               existing().unlockStatus == 'NO_MATCH_REFUND_ELIGIBLE' &&
+                               existing().alternativeAccepted == false &&
+                               existing().refundStatus == 'NONE' &&
+                               incoming().refundStatus == 'UNDER_VERIFICATION' &&
+                               incoming().diff(existing()).affectedKeys().hasOnly(['refundStatus', 'updatedAt'])
+                             )
+                           )
+                         )
+                       );
+      allow delete: if false;
+    }
+
+    // Bookings & Visit Requests (2, 6, 12, 24 months)
+    match /bookings/{bookingId} {
+      allow get: if isValidId(bookingId) && (
+        isMasterSuperAdmin() ||
+        (isSignedIn() && (resource.data.tenantUid == request.auth.uid || resource.data.ownerUid == request.auth.uid))
+      );
+      allow list: if isSignedIn() && (
+        isBootstrapMasterEmail() ||
+        resource.data.tenantUid == request.auth.uid ||
+        resource.data.ownerUid == request.auth.uid
+      );
+      allow create: if isSignedIn() &&
+                       isValidId(bookingId) &&
+                       isValidBookingRequest(incoming()) &&
+                       incoming().tenantUid == request.auth.uid &&
+                       incoming().firstMonthRentPaid == false &&
+                       incoming().ownerDecision == 'PENDING' &&
+                       incoming().status in ['PENDING_PAYMENT', 'VISIT_REQUESTED'] &&
+                       exists(/databases/$(database)/documents/properties/$(incoming().propertyId)) &&
+                       get(/databases/$(database)/documents/properties/$(incoming().propertyId)).data.published == true &&
+                       get(/databases/$(database)/documents/properties/$(incoming().propertyId)).data.ownerUid == incoming().ownerUid;
+      allow update: if isValidId(bookingId) &&
+                       isValidBookingRequest(incoming()) &&
+                       incoming().propertyId == existing().propertyId &&
+                       incoming().tenantUid == existing().tenantUid &&
+                       incoming().ownerUid == existing().ownerUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         isMasterSuperAdmin() ||
+                         (
+                           // Tenant cancellation
+                           isSignedIn() &&
+                           existing().tenantUid == request.auth.uid &&
+                           existing().status in ['PENDING_PAYMENT', 'VISIT_REQUESTED'] &&
+                           incoming().status == 'CANCELLED' &&
+                           incoming().firstMonthRentPaid == existing().firstMonthRentPaid &&
+                           incoming().ownerDecision == existing().ownerDecision &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['status', 'cancellationReason', 'updatedAt'])
+                         ) ||
+                         (
+                           // Admin-approved Owner decision (bookings require firstMonthRentPaid == true)
+                           isVerifiedApprovedOwner() &&
+                           existing().ownerUid == request.auth.uid &&
+                           existing().ownerDecision == 'PENDING' &&
+                           (existing().requestType == 'VISIT' || existing().firstMonthRentPaid == true) &&
+                           incoming().ownerDecision in ['APPROVED', 'REJECTED'] &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['ownerDecision', 'ownerDecisionNote', 'status', 'updatedAt'])
+                         )
+                       );
+      allow delete: if false;
+    }
+
+    // Payment Orders & 24h Owner Settlement Ledger (No client fake-paid writes)
+    match /payment_orders/{orderId} {
+      allow get: if isValidId(orderId) && (
+        isMasterSuperAdmin() ||
+        (isSignedIn() && (resource.data.tenantUid == request.auth.uid || resource.data.ownerUid == request.auth.uid))
+      );
+      allow list: if isSignedIn() && (
+        isBootstrapMasterEmail() ||
+        resource.data.tenantUid == request.auth.uid ||
+        resource.data.ownerUid == request.auth.uid
+      );
+      allow create: if isSignedIn() &&
+                       isValidId(orderId) &&
+                       isValidPaymentOrder(incoming()) &&
+                       incoming().tenantUid == request.auth.uid &&
+                       incoming().paymentStatus == 'AWAITING_GATEWAY_VERIFICATION' &&
+                       incoming().ownerVerifiedReceipt == false &&
+                       (incoming().paymentPurpose != 'MONTHLY_RENT' || incoming().platformFeeInr == 0);
+      allow update: if isValidId(orderId) &&
+                       isValidPaymentOrder(incoming()) &&
+                       incoming().tenantUid == existing().tenantUid &&
+                       incoming().ownerUid == existing().ownerUid &&
+                       incoming().amountInr == existing().amountInr &&
+                       incoming().platformFeeInr == existing().platformFeeInr &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         isMasterSuperAdmin() ||
+                         (
+                           // Tenant can only mark failed/cancelled gateway attempt
+                           isSignedIn() &&
+                           existing().tenantUid == request.auth.uid &&
+                           existing().paymentStatus == 'AWAITING_GATEWAY_VERIFICATION' &&
+                           incoming().paymentStatus in ['FAILED', 'CANCELLED'] &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['paymentStatus', 'failureReason', 'updatedAt'])
+                         ) ||
+                         (
+                           // Verified Owner can acknowledge verified server-confirmed rent receipt
+                           isVerifiedApprovedOwner() &&
+                           existing().ownerUid == request.auth.uid &&
+                           existing().paymentStatus == 'VERIFIED_BY_SERVER' &&
+                           incoming().ownerVerifiedReceipt == true &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['ownerVerifiedReceipt', 'updatedAt'])
+                         )
+                       );
+      allow delete: if false;
+    }
+
+    // Notifications (Strictly scoped to recipientUid)
+    match /notifications/{notifId} {
+      allow get: if isSignedIn() && isValidId(notifId) && (resource.data.recipientUid == request.auth.uid || isMasterSuperAdmin());
+      allow list: if isSignedIn() && (resource.data.recipientUid == request.auth.uid || isBootstrapMasterEmail());
+      allow create: if isSignedIn() &&
+                       isValidId(notifId) &&
+                       isValidNotification(incoming()) &&
+                       incoming().readFlag == false &&
+                       (incoming().recipientUid == request.auth.uid || isMasterSuperAdmin() || isVerifiedApprovedOwner());
+      allow update: if isSignedIn() &&
+                       isValidId(notifId) &&
+                       resource.data.recipientUid == request.auth.uid &&
+                       isValidNotification(incoming()) &&
+                       incoming().recipientUid == existing().recipientUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['readFlag']);
+      allow delete: if false;
+    }
+
+    // Complaints & Support Tickets
+    match /complaints/{complaintId} {
+      allow get: if isValidId(complaintId) && (isMasterSuperAdmin() || (isSignedIn() && resource.data.reporterUid == request.auth.uid));
+      allow list: if isSignedIn() && (isBootstrapMasterEmail() || resource.data.reporterUid == request.auth.uid);
+      allow create: if isSignedIn() &&
+                       isValidId(complaintId) &&
+                       isValidComplaint(incoming()) &&
+                       incoming().reporterUid == request.auth.uid &&
+                       incoming().status == 'OPEN' &&
+                       incoming().adminResolutionNote == '';
+      allow update: if isMasterSuperAdmin() &&
+                       isValidId(complaintId) &&
+                       isValidComplaint(incoming()) &&
+                       incoming().reporterUid == existing().reporterUid &&
+                       incoming().createdAt == existing().createdAt;
+      allow delete: if false;
+    }
+
+    // Verified Anti-Duplicate Reviews (Deterministic ID: bookingId_reviewerUid; COMPLETED stay required)
+    match /reviews/{reviewId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() &&
+                       isValidId(reviewId) &&
+                       isValidStayReview(incoming()) &&
+                       incoming().reviewerUid == request.auth.uid &&
+                       reviewId == (incoming().bookingId + '_' + request.auth.uid) &&
+                       exists(/databases/$(database)/documents/bookings/$(incoming().bookingId)) &&
+                       get(/databases/$(database)/documents/bookings/$(incoming().bookingId)).data.status == 'COMPLETED' &&
+                       (
+                         (
+                           incoming().reviewerRole == 'TENANT' &&
+                           get(/databases/$(database)/documents/bookings/$(incoming().bookingId)).data.tenantUid == request.auth.uid &&
+                           get(/databases/$(database)/documents/bookings/$(incoming().bookingId)).data.ownerUid == incoming().targetUid
+                         ) ||
+                         (
+                           incoming().reviewerRole == 'OWNER' &&
+                           get(/databases/$(database)/documents/bookings/$(incoming().bookingId)).data.ownerUid == request.auth.uid &&
+                           get(/databases/$(database)/documents/bookings/$(incoming().bookingId)).data.tenantUid == incoming().targetUid
+                         )
+                       );
+      allow update, delete: if false;
+    }
+
+    // Explicit Authorization Requests
+    match /authorization_requests/{requestId} {
+      allow get: if isValidId(requestId) && (
+        isMasterSuperAdmin() ||
+        (isSignedIn() && resource.data.requesterUid == request.auth.uid)
+      );
+      allow list: if isSignedIn() && (
+        isBootstrapMasterEmail() ||
+        resource.data.masterUid == request.auth.uid ||
+        resource.data.requesterUid == request.auth.uid
+      );
+      allow create: if isSignedIn() &&
+                       isValidId(requestId) &&
+                       isValidAuthRequest(incoming()) &&
+                       incoming().requesterUid == request.auth.uid &&
+                       incoming().status == 'PENDING' &&
+                       incoming().reviewedByUid == '';
+      allow update: if isMasterSuperAdmin() &&
+                       isValidId(requestId) &&
+                       existing().status == 'PENDING' &&
+                       isValidAuthRequest(incoming()) &&
+                       incoming().masterUid == existing().masterUid &&
+                       incoming().requesterUid == existing().requesterUid &&
+                       incoming().requesterEmail == existing().requesterEmail &&
+                       incoming().requesterName == existing().requesterName &&
+                       incoming().requesterRole == existing().requesterRole &&
+                       incoming().changeType == existing().changeType &&
+                       incoming().summary == existing().summary &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().reviewedByUid == request.auth.uid &&
+                       incoming().status in ['APPROVED', 'REJECTED'] &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'status', 'reviewedByUid', 'reviewNote', 'updatedAt'
+                       ]);
+      allow delete: if false;
+    }
+
+    // Permanent Immutable Audit Logs
+    match /audit_logs/{logId} {
+      allow get: if isMasterSuperAdmin() && isValidId(logId);
+      allow list: if isVerifiedEmail() && (isBootstrapMasterEmail() || resource.data.masterUid == request.auth.uid);
+      allow create: if isSignedIn() &&
+                       isValidId(logId) &&
+                       isValidAuditLog(incoming()) &&
+                       incoming().actorUid == request.auth.uid &&
+                       (
+                         isMasterSuperAdmin() ||
+                         incoming().action in ['AUTH_REQUEST_SUBMITTED', 'USER_SECURITY_SETUP', 'USER_REGISTERED', 'PAYMENT_ORDER_CREATED', 'COMPLAINT_SUBMITTED']
+                       );
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Encrypted Backup Snapshots Ledger
+    match /backup_snapshots/{snapshotId} {
+      allow get: if isMasterSuperAdmin() && isValidId(snapshotId);
+      allow list: if isVerifiedEmail() && (isBootstrapMasterEmail() || resource.data.masterUid == request.auth.uid);
+      allow create: if isMasterSuperAdmin() &&
+                       isValidId(snapshotId) &&
+                       isValidBackupSnapshot(incoming()) &&
+                       incoming().masterUid == request.auth.uid &&
+                       incoming().createdByUid == request.auth.uid;
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}

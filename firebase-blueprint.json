@@ -1,0 +1,455 @@
+{
+  "entities": {
+    "MasterConfig": {
+      "title": "MasterConfig",
+      "description": "Singleton governance and ownership configuration exclusively controlled by the sole Master Super Admin.",
+      "type": "object",
+      "properties": {
+        "masterUid": { "type": "string" },
+        "masterEmail": { "type": "string" },
+        "masterDisplayName": { "type": "string" },
+        "ownershipLocked": { "type": "boolean" },
+        "ownershipTransferArmed": { "type": "boolean" },
+        "pendingSuccessorEmail": { "type": "string" },
+        "twoFactorEnforced": { "type": "boolean" },
+        "strongPasswordEnforced": { "type": "boolean" },
+        "autoBackupEnabled": { "type": "boolean" },
+        "backupIntervalHours": { "type": "integer" },
+        "recoveryEmail": { "type": "string" },
+        "firebaseProjectId": { "type": "string" },
+        "domainName": { "type": "string" },
+        "publishingAccount": { "type": "string" },
+        "sourceRepoRef": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "masterUid", "masterEmail", "masterDisplayName", "ownershipLocked",
+        "ownershipTransferArmed", "pendingSuccessorEmail", "twoFactorEnforced",
+        "strongPasswordEnforced", "autoBackupEnabled", "backupIntervalHours",
+        "recoveryEmail", "firebaseProjectId", "domainName", "publishingAccount",
+        "sourceRepoRef", "createdAt", "updatedAt"
+      ]
+    },
+    "PublicDirectory": {
+      "title": "PublicDirectory",
+      "description": "Non-PII directory pointing authenticated members to the Master UID for authorization request routing.",
+      "type": "object",
+      "properties": {
+        "masterUid": { "type": "string" },
+        "strictLockActive": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["masterUid", "strictLockActive", "updatedAt"]
+    },
+    "UserSecurityProfile": {
+      "title": "UserSecurityProfile",
+      "description": "User-isolated profile for Tenant or Property Owner with Admin-controlled verification flags.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "phone": { "type": "string" },
+        "accountType": { "type": "string", "enum": ["TENANT", "OWNER"] },
+        "preferredLanguage": { "type": "string", "enum": ["en", "hi"] },
+        "role": { "type": "string", "enum": ["MEMBER"] },
+        "ownerApproved": { "type": "boolean" },
+        "kycVerified": { "type": "boolean" },
+        "vaultPasswordHash": { "type": "string" },
+        "vaultPasswordSalt": { "type": "string" },
+        "totpEnabled": { "type": "boolean" },
+        "recoveryCodesCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "email", "displayName", "phone", "accountType", "preferredLanguage",
+        "role", "ownerApproved", "kycVerified", "vaultPasswordHash",
+        "vaultPasswordSalt", "totpEnabled", "recoveryCodesCount", "createdAt", "updatedAt"
+      ]
+    },
+    "AdminAccount": {
+      "title": "AdminAccount",
+      "description": "Explicitly authorized Admin account added and revocable solely by the Master Super Admin.",
+      "type": "object",
+      "properties": {
+        "adminUid": { "type": "string" },
+        "masterUid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "title": { "type": "string" },
+        "canViewProperties": { "type": "boolean" },
+        "canViewAuditSummary": { "type": "boolean" },
+        "active": { "type": "boolean" },
+        "addedByUid": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "adminUid", "masterUid", "email", "displayName", "title",
+        "canViewProperties", "canViewAuditSummary", "active", "addedByUid",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "AppSetting": {
+      "title": "AppSetting",
+      "description": "Application setting controlled exclusively by the Master Super Admin.",
+      "type": "object",
+      "properties": {
+        "masterUid": { "type": "string" },
+        "key": { "type": "string" },
+        "label": { "type": "string" },
+        "value": { "type": "string" },
+        "category": { "type": "string", "enum": ["SECURITY", "PORTAL", "GOVERNANCE", "OPERATIONS"] },
+        "description": { "type": "string" },
+        "updatedByUid": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["masterUid", "key", "label", "value", "category", "description", "updatedByUid", "createdAt", "updatedAt"]
+    },
+    "PaymentGatewayConfig": {
+      "title": "PaymentGatewayConfig",
+      "description": "Masked payment gateway configuration managed solely by Master Super Admin.",
+      "type": "object",
+      "properties": {
+        "masterUid": { "type": "string" },
+        "providerName": { "type": "string" },
+        "merchantDisplayName": { "type": "string" },
+        "environment": { "type": "string", "enum": ["SANDBOX", "PRODUCTION"] },
+        "currency": { "type": "string" },
+        "payoutSchedule": { "type": "string", "enum": ["DAILY", "WEEKLY", "MONTHLY"] },
+        "maskedSettlementLast4": { "type": "string" },
+        "active": { "type": "boolean" },
+        "updatedByUid": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "masterUid", "providerName", "merchantDisplayName", "environment",
+        "currency", "payoutSchedule", "maskedSettlementLast4", "active",
+        "updatedByUid", "createdAt", "updatedAt"
+      ]
+    },
+    "PropertyRecord": {
+      "title": "PropertyRecord",
+      "description": "Admin-published property & room listing in India. Only Master Super Admin may create, edit, or publish.",
+      "type": "object",
+      "properties": {
+        "masterUid": { "type": "string" },
+        "name": { "type": "string" },
+        "state": { "type": "string" },
+        "city": { "type": "string" },
+        "locality": { "type": "string" },
+        "buildingName": { "type": "string" },
+        "address": { "type": "string" },
+        "roomNumber": { "type": "string" },
+        "roomType": { "type": "string", "enum": ["SINGLE", "DOUBLE"] },
+        "monthlyRentInr": { "type": "integer" },
+        "facilities": { "type": "array" },
+        "photoUrls": { "type": "array" },
+        "occupancyStatus": { "type": "string", "enum": ["AVAILABLE", "OCCUPIED", "MAINTENANCE"] },
+        "published": { "type": "boolean" },
+        "ownerUid": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "ownerPhoneMasked": { "type": "string" },
+        "ownerVerified": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "masterUid", "name", "state", "city", "locality", "buildingName",
+        "address", "roomNumber", "roomType", "monthlyRentInr", "facilities",
+        "photoUrls", "occupancyStatus", "published", "ownerUid", "ownerName",
+        "ownerPhoneMasked", "ownerVerified", "createdAt", "updatedAt"
+      ]
+    },
+    "SearchUnlock": {
+      "title": "SearchUnlock",
+      "description": "₹99 locality search preference and unlock/refund eligibility record.",
+      "type": "object",
+      "properties": {
+        "tenantUid": { "type": "string" },
+        "state": { "type": "string" },
+        "city": { "type": "string" },
+        "locality": { "type": "string" },
+        "buildingFilter": { "type": "string" },
+        "monthlyBudgetInr": { "type": "integer" },
+        "roomPreference": { "type": "string", "enum": ["SINGLE", "DOUBLE", "ANY"] },
+        "requiredFacilities": { "type": "array" },
+        "feeAmountInr": { "type": "integer" },
+        "unlockStatus": { "type": "string", "enum": ["PAYMENT_PENDING", "UNLOCKED", "NO_MATCH_REFUND_ELIGIBLE"] },
+        "alternativeOffered": { "type": "boolean" },
+        "alternativeRentInr": { "type": "integer" },
+        "alternativeAccepted": { "type": "boolean" },
+        "refundStatus": { "type": "string", "enum": ["NONE", "REQUESTED", "UNDER_VERIFICATION", "REFUNDED", "NOT_ELIGIBLE_ALTERNATIVE_ACCEPTED"] },
+        "paymentOrderId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "tenantUid", "state", "city", "locality", "buildingFilter",
+        "monthlyBudgetInr", "roomPreference", "requiredFacilities", "feeAmountInr",
+        "unlockStatus", "alternativeOffered", "alternativeRentInr", "alternativeAccepted",
+        "refundStatus", "paymentOrderId", "createdAt", "updatedAt"
+      ]
+    },
+    "BookingRequest": {
+      "title": "BookingRequest",
+      "description": "Tenant booking (2, 6, 12, 24 months) or visit request with first-month rent requirement.",
+      "type": "object",
+      "properties": {
+        "propertyId": { "type": "string" },
+        "propertyTitle": { "type": "string" },
+        "localitySummary": { "type": "string" },
+        "tenantUid": { "type": "string" },
+        "tenantName": { "type": "string" },
+        "ownerUid": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "requestType": { "type": "string", "enum": ["BOOKING", "VISIT"] },
+        "durationMonths": { "type": "integer" },
+        "monthlyRentInr": { "type": "integer" },
+        "firstMonthRentPaid": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["PENDING_PAYMENT", "VISIT_REQUESTED", "ACTIVE", "CANCELLED", "COMPLETED"] },
+        "ownerDecision": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] },
+        "ownerDecisionNote": { "type": "string" },
+        "cancellationReason": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "propertyId", "propertyTitle", "localitySummary", "tenantUid", "tenantName",
+        "ownerUid", "ownerName", "requestType", "durationMonths", "monthlyRentInr",
+        "firstMonthRentPaid", "status", "ownerDecision", "ownerDecisionNote",
+        "cancellationReason", "createdAt", "updatedAt"
+      ]
+    },
+    "PaymentOrder": {
+      "title": "PaymentOrder",
+      "description": "Payment order for ₹99 search fee, 1st-month booking rent, or zero-fee monthly rent with 24h settlement tracking.",
+      "type": "object",
+      "properties": {
+        "tenantUid": { "type": "string" },
+        "ownerUid": { "type": "string" },
+        "bookingId": { "type": "string" },
+        "searchUnlockId": { "type": "string" },
+        "paymentPurpose": { "type": "string", "enum": ["SEARCH_FEE_99", "FIRST_MONTH_RENT", "MONTHLY_RENT"] },
+        "amountInr": { "type": "integer" },
+        "platformFeeInr": { "type": "integer" },
+        "rentMonthNumber": { "type": "integer" },
+        "paymentStatus": { "type": "string", "enum": ["AWAITING_GATEWAY_VERIFICATION", "VERIFIED_BY_SERVER", "FAILED", "CANCELLED", "REFUNDED"] },
+        "settlementStatus": { "type": "string", "enum": ["NOT_APPLICABLE", "PENDING_VERIFICATION", "SCHEDULED_24H", "SETTLED_24H"] },
+        "ownerVerifiedReceipt": { "type": "boolean" },
+        "receiptRef": { "type": "string" },
+        "failureReason": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "tenantUid", "ownerUid", "bookingId", "searchUnlockId", "paymentPurpose",
+        "amountInr", "platformFeeInr", "rentMonthNumber", "paymentStatus",
+        "settlementStatus", "ownerVerifiedReceipt", "receiptRef", "failureReason",
+        "createdAt", "updatedAt"
+      ]
+    },
+    "NotificationItem": {
+      "title": "NotificationItem",
+      "description": "User-scoped notification for bookings, payments, reminders, refunds, and support.",
+      "type": "object",
+      "properties": {
+        "recipientUid": { "type": "string" },
+        "category": { "type": "string", "enum": ["BOOKING", "PAYMENT", "RENT_REMINDER", "REFUND", "AVAILABILITY", "COMPLAINT"] },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "readFlag": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["recipientUid", "category", "title", "message", "readFlag", "createdAt"]
+    },
+    "ComplaintTicket": {
+      "title": "ComplaintTicket",
+      "description": "Complaint and support ticket filed by a Tenant or verified Owner.",
+      "type": "object",
+      "properties": {
+        "reporterUid": { "type": "string" },
+        "reporterRole": { "type": "string", "enum": ["TENANT", "OWNER"] },
+        "reporterName": { "type": "string" },
+        "category": { "type": "string", "enum": ["PROPERTY", "PAYMENT", "REFUND", "SAFETY", "OWNER_TENANT", "OTHER"] },
+        "subject": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["OPEN", "IN_REVIEW", "RESOLVED", "CLOSED"] },
+        "adminResolutionNote": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "reporterUid", "reporterRole", "reporterName", "category",
+        "subject", "description", "status", "adminResolutionNote", "createdAt", "updatedAt"
+      ]
+    },
+    "StayReview": {
+      "title": "StayReview",
+      "description": "Verified anti-duplicate review tied to a completed booking.",
+      "type": "object",
+      "properties": {
+        "bookingId": { "type": "string" },
+        "reviewerUid": { "type": "string" },
+        "reviewerRole": { "type": "string", "enum": ["TENANT", "OWNER"] },
+        "targetUid": { "type": "string" },
+        "rating": { "type": "integer" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["bookingId", "reviewerUid", "reviewerRole", "targetUid", "rating", "comment", "createdAt"]
+    },
+    "AuthorizationRequest": {
+      "title": "AuthorizationRequest",
+      "description": "Explicit change authorization request submitted by non-Master roles.",
+      "type": "object",
+      "properties": {
+        "masterUid": { "type": "string" },
+        "requesterUid": { "type": "string" },
+        "requesterEmail": { "type": "string" },
+        "requesterName": { "type": "string" },
+        "requesterRole": { "type": "string", "enum": ["DEVELOPER", "EMPLOYEE", "OWNER", "TENANT"] },
+        "changeType": { "type": "string", "enum": ["APP_EDIT", "PROPERTY_UPDATE", "ACCESS_ELEVATION", "GATEWAY_CHANGE"] },
+        "summary": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] },
+        "reviewedByUid": { "type": "string" },
+        "reviewNote": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "masterUid", "requesterUid", "requesterEmail", "requesterName",
+        "requesterRole", "changeType", "summary", "status",
+        "reviewedByUid", "reviewNote", "createdAt", "updatedAt"
+      ]
+    },
+    "AuditLogEntry": {
+      "title": "AuditLogEntry",
+      "description": "Immutable, append-only permanent audit log entry.",
+      "type": "object",
+      "properties": {
+        "masterUid": { "type": "string" },
+        "actorUid": { "type": "string" },
+        "actorEmail": { "type": "string" },
+        "actorRole": { "type": "string", "enum": ["MASTER_SUPER_ADMIN", "ADMIN", "OWNER", "TENANT", "MEMBER"] },
+        "action": { "type": "string" },
+        "targetType": { "type": "string" },
+        "targetId": { "type": "string" },
+        "summary": { "type": "string" },
+        "severity": { "type": "string", "enum": ["INFO", "SECURITY", "CRITICAL"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "masterUid", "actorUid", "actorEmail", "actorRole", "action",
+        "targetType", "targetId", "summary", "severity", "createdAt"
+      ]
+    },
+    "BackupSnapshot": {
+      "title": "BackupSnapshot",
+      "description": "Immutable automatic or manual governance backup snapshot metadata.",
+      "type": "object",
+      "properties": {
+        "masterUid": { "type": "string" },
+        "createdByUid": { "type": "string" },
+        "triggerType": { "type": "string", "enum": ["AUTOMATIC", "MANUAL"] },
+        "settingsCount": { "type": "integer" },
+        "propertiesCount": { "type": "integer" },
+        "adminsCount": { "type": "integer" },
+        "auditLogsCount": { "type": "integer" },
+        "checksumSha256": { "type": "string" },
+        "encryptedStatus": { "type": "string", "enum": ["AES256_TLS13_VERIFIED"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "masterUid", "createdByUid", "triggerType", "settingsCount",
+        "propertiesCount", "adminsCount", "auditLogsCount", "checksumSha256",
+        "encryptedStatus", "createdAt"
+      ]
+    },
+    "AccountClaim": {
+      "title": "AccountClaim",
+      "description": "Hashed identifier uniqueness claim preventing duplicate email or phone registrations without exposing PII.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string" },
+        "claimType": { "type": "string", "enum": ["EMAIL", "PHONE"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "claimType", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/governance/master_config": {
+      "schema": { "$ref": "#/entities/MasterConfig" },
+      "description": "Singleton Master Super Admin ownership, security, and infrastructure configuration."
+    },
+    "/governance/public_directory": {
+      "schema": { "$ref": "#/entities/PublicDirectory" },
+      "description": "Non-PII directory storing Master UID for authorization request routing."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserSecurityProfile" },
+      "description": "Per-user isolated Tenant/Owner profile."
+    },
+    "/account_claims/{claimId}": {
+      "schema": { "$ref": "#/entities/AccountClaim" },
+      "description": "SHA-256 hashed uniqueness claim for duplicate account prevention."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminAccount" },
+      "description": "Explicit Admin accounts registry controlled exclusively by Master Super Admin."
+    },
+    "/app_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/AppSetting" },
+      "description": "Application settings edited and deleted solely by Master Super Admin."
+    },
+    "/payment_gateways/{gatewayId}": {
+      "schema": { "$ref": "#/entities/PaymentGatewayConfig" },
+      "description": "Masked payment gateway profiles controlled solely by Master Super Admin."
+    },
+    "/properties/{propertyId}": {
+      "schema": { "$ref": "#/entities/PropertyRecord" },
+      "description": "Admin-verified properties and room availability in India."
+    },
+    "/search_unlocks/{unlockId}": {
+      "schema": { "$ref": "#/entities/SearchUnlock" },
+      "description": "Tenant ₹99 locality search preference and refund verification records."
+    },
+    "/bookings/{bookingId}": {
+      "schema": { "$ref": "#/entities/BookingRequest" },
+      "description": "Rental booking (2/6/12/24 months) and visit requests."
+    },
+    "/payment_orders/{orderId}": {
+      "schema": { "$ref": "#/entities/PaymentOrder" },
+      "description": "Server-verified payment orders and 24-hour owner settlement records."
+    },
+    "/notifications/{notifId}": {
+      "schema": { "$ref": "#/entities/NotificationItem" },
+      "description": "User-scoped notifications."
+    },
+    "/complaints/{complaintId}": {
+      "schema": { "$ref": "#/entities/ComplaintTicket" },
+      "description": "Complaint and support tickets."
+    },
+    "/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/StayReview" },
+      "description": "Anti-duplicate stay reviews tied to completed bookings."
+    },
+    "/authorization_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/AuthorizationRequest" },
+      "description": "Change authorization requests requiring Master Super Admin approval."
+    },
+    "/audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLogEntry" },
+      "description": "Permanent append-only audit trail."
+    },
+    "/backup_snapshots/{snapshotId}": {
+      "schema": { "$ref": "#/entities/BackupSnapshot" },
+      "description": "Encrypted backup snapshot ledger."
+    }
+  }
+}
