@@ -1,4 +1,3 @@
-
 name: Build Android APK
 
 on:
@@ -25,6 +24,7 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           cmdline-tools: true
+          accept-sdk-license: true
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -40,4 +40,3 @@ jobs:
           name: Nest-Haven-APK
           path: '**/build/outputs/apk/debug/*.apk'
           if-no-files-found: error
-
