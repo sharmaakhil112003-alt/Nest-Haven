@@ -24,7 +24,7 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           cmdline-tools: true
-          accept-sdk-license: true
+          accept-android-sdk-licenses: true
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
